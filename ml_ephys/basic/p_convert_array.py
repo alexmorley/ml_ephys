@@ -141,9 +141,16 @@ def convert_array(*,input,output,format='',format_out='',dimensions='',dtype='',
         raise Exception('Unable to determine datatype for output array')
     
     if (dims[1] == -1) and (dims[0] > 0):
-        if ((dtype) and (format_in=='dat') and not multifile):
+        if ((dtype) and (format_in=='dat')):
             bits      = int(dtype[-2:])        # number of bits per entry of dtype, TODO: make this smarter
-            filebytes = os.stat(input).st_size # bytes in input file
+            if not multifile:
+                filebytes = os.stat(input).st_size # bytes in input file
+            else:
+                dims1 = np.copy(dims)
+                filebytes1 = os.stat(input).st_size # bytes in input file
+                entries1   = int(filebytes1/(int(bits/8)))
+                dims1[1]   = int(entries1/dims1[0])
+                filebytes = sum([os.stat(inp).st_size for inp in inputs])
             entries   = int(filebytes/(int(bits/8))) # entries in input file
             dims[1]   = int(entries/dims[0])   # caclulated second dimension
             if DEBUG:
@@ -201,14 +208,19 @@ def convert_array(*,input,output,format='',format_out='',dimensions='',dtype='',
     elif (format_out=='mda') or (format_out=='npy'):
         if format_in=='dat' and multifile:
             print ('Warning: loading entire array into memory. This should be avoided in the future.')
+            print (channels) #DEBUG
             A=np.fromfile(inputs[0],dtype=dtype,count=np.product(dims))
-            A=A.reshape(tuple(dims),order='F')
+            A=A.reshape(tuple(dims1),order='F')
             A=A[channels,:] 
             for inputn in inputs[1:]:
                 An=np.fromfile(inputn,dtype=dtype,count=np.product(dims))
-                An=An.reshape(tuple(dims),order='F')
+                dimsN=np.copy(dims1);
+                dimsN[1]=An.size/dims1[0]
+                An=An.reshape(tuple(dimsN),order='F')
                 An=An[channels,:]
-                A=np.concatenate((A,An),axis=0) 
+                print(A.shape); print(An.shape);
+                A=np.concatenate((A,An),axis=1) 
+            print (A.shape) #DEBUG
             if format_out=='mda':
                 mdaio.writemda(A,output,dtype=dtype_out)
             else:
